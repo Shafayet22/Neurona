@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Register - Neurona</title>
+</head>
+<body>
+    <h2>Create an Account</h2>
+    <form action="/register" method="POST">
+        <label>Username:</label>
+        <input type="text" name="username" required /><br><br>
+
+        <label>Password:</label>
+        <input type="password" name="password" required /><br><br>
+
+        <label>Register as:</label>
+        <select name="role" required>
+            <option value="">--Select Role--</option>
+            <option value="creator">Creator</option>
+            <option value="investor">Investor</option>
+        </select><br><br>
+
+        <input type="submit" value="Register" />
+    </form>
+
+    <p>Already have an account? <a href="/login">Login here</a></p>
+</body>
+</html>

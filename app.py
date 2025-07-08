@@ -3,7 +3,7 @@ import sqlite3
 import os
 from werkzeug.security import generate_password_hash,check_password_hash
 import secrets
-
+from email_validator import validate_email, EmailNotValidError
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
@@ -32,30 +32,56 @@ def home():
     return render_template('index.html')
 
 # Register new users
-@app.route('/register', methods=['GET','POST'])
+@app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         username = request.form['username'].strip()
         email = request.form['email'].strip()
-        raw_password = request.form['password'].strip()
+        password = request.form['password'].strip()
+        confirm_password = request.form['confirm_password'].strip()
         role = request.form['role']
 
-        if not username or not email or not raw_password or not role:
-            flash('Please fill all fields','danger')
+        # Email validation
+        try:
+            valid = validate_email(email)
+            email = valid.email
+        except EmailNotValidError as e:
+            flash(str(e), 'danger')
             return redirect(url_for('register'))
 
-        hashed_password = generate_password_hash(raw_password)
+        # Enforce specific domain (e.g., @gmail.com)
+        allowed_domain = "@gmail.com"
+        if not email.endswith(allowed_domain):
+            flash(f'Email must end with {allowed_domain}', 'danger')
+            return redirect(url_for('register'))
 
-        conn = sqlite3.connect(DB_NAME)
+        # Field check
+        if not username or not email or not password or not confirm_password or not role:
+            flash('Please fill all fields.', 'danger')
+            return redirect(url_for('register'))
+
+        # Password match
+        if password != confirm_password:
+            flash('Passwords do not match.', 'danger')
+            return redirect(url_for('register'))
+
+        # Password strength
+        if len(password) < 8 or not any(char in "!@#$%^&*()_+" for char in password):
+            flash('Password must be at least 8 characters and include a special character.', 'danger')
+            return redirect(url_for('register'))
+
+        hashed_password = generate_password_hash(password)
+
+        conn = sqlite3.connect(DB_NAME, timeout=5)
         c = conn.cursor()
         try:
-            c.execute("INSERT INTO users(username,email,password,role) VALUES(?,?,?,?)",
-                      (username,email,hashed_password,role))
+            c.execute("INSERT INTO users(username, email, password, role) VALUES (?, ?, ?, ?)",
+                      (username, email, hashed_password, role))
             conn.commit()
-            flash('Registration successful!Please login.','success')
+            flash('Registration successful! Please login.', 'success')
             return redirect(url_for('login'))
         except sqlite3.IntegrityError:
-            flash('Email already exists.','danger')
+            flash('Email already exists.', 'danger')
             return redirect(url_for('register'))
         finally:
             conn.close()
@@ -131,5 +157,4 @@ def logout():
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)
-
 

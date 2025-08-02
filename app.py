@@ -33,6 +33,23 @@ def init_db():
                 present_address TEXT
             )
         ''')
+        c.execute('''
+                   CREATE TABLE ideas (
+                       id INTEGER PRIMARY KEY AUTOINCREMENT,
+                       creator_id INTEGER NOT NULL,
+                       title TEXT NOT NULL,
+                       category TEXT NOT NULL,
+                       industry TEXT,
+                       summary TEXT,
+                       description TEXT,
+                       funding_needed REAL,
+                       equity_offered REAL,
+                       pitch_deck TEXT,
+                       contact_email TEXT,
+                       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                       FOREIGN KEY (creator_id) REFERENCES users(id)
+                   )
+               ''')
         admin_email = "admin@neurona.com"
         admin_password = "admin@123"
         hashed_pw = generate_password_hash(admin_password)
@@ -260,10 +277,11 @@ def admin_dashboard():
 
     conn = get_db_connection()
     total_users = conn.execute("SELECT COUNT(*) FROM users WHERE role IN ('creator', 'investor')").fetchone()[0]
+    total_ideas = conn.execute("SELECT COUNT(*) FROM ideas").fetchone()[0]
     conn.close()
 
-    return render_template('admin_dashboard.html', username=session.get('username'), total_users=total_users)
-
+    return render_template('admin_dashboard.html', username=session.get('username'), total_users=total_users,
+                           total_ideas=total_ideas)
 
 @app.route('/user_management')
 def user_management():

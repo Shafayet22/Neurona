@@ -502,6 +502,44 @@ def logout():
     return redirect(url_for('login'))
 
 
+@app.route('/admin_ideas')
+def admin_ideas():
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    ideas = conn.execute('''
+        SELECT 
+            i.id, 
+            i.title, 
+            i.category, 
+            i.summary, 
+            i.industry,
+            i.funding_needed,
+            i.equity_offered,
+            i.contact_email,
+            u.username 
+        FROM ideas i 
+        JOIN users u ON i.creator_id = u.id
+    ''').fetchall()
+    conn.close()
+
+    return render_template('admin_ideas.html', ideas=ideas)
+
+
+# NEW ROUTE TO REMOVE AN IDEA
+@app.route('/remove_idea/<int:idea_id>')
+def remove_idea(idea_id):
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    conn.execute('DELETE FROM ideas WHERE id = ?', (idea_id,))
+    conn.commit()
+    conn.close()
+    flash("Idea removed successfully.", "success")
+    return redirect(url_for('admin_ideas'))
+
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)

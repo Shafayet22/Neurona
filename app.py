@@ -253,13 +253,16 @@ def investor_dashboard():
     return redirect(url_for('login'))
 
 
-
 @app.route('/admin_dashboard')
 def admin_dashboard():
     if 'user_id' not in session or session.get('role') != 'admin':
         return redirect(url_for('login'))
-    return render_template('admin_dashboard.html', username=session.get('username'))
 
+    conn = get_db_connection()
+    total_users = conn.execute("SELECT COUNT(*) FROM users WHERE role IN ('creator', 'investor')").fetchone()[0]
+    conn.close()
+
+    return render_template('admin_dashboard.html', username=session.get('username'), total_users=total_users)
 
 
 @app.route('/user_management')

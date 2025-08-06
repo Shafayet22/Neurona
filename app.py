@@ -390,32 +390,6 @@ def delete_user(user_id):
     return redirect(url_for('user_management'))
 
 
-# admin unverifies a user in user_management
-@app.route('/unverify_user/<int:user_id>/<role>')
-def unverify_user(user_id, role):
-    if 'user_id' not in session or session.get('role') != 'admin':
-        return redirect(url_for('login'))
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # prevent unverifying admin
-    if role.lower() == 'admin':
-        flash("Cannot unverify an admin user.", "danger")
-        conn.close()
-        return redirect(url_for('user_management'))
-
-    cursor.execute("UPDATE users SET verified = 0 WHERE id = ? AND role = ?", (user_id, role.lower()))
-    conn.commit()
-
-    if cursor.rowcount == 0:
-        flash("No user was updated. Possible role mismatch.", "warning")
-    else:
-        flash("User verification removed.", "info")
-
-    conn.close()
-    return redirect(url_for('user_management'))
-
 
 # verification request from creator is shown in admin panel (verify creator button)
 @app.route('/admin/verify_creators')
@@ -425,7 +399,7 @@ def verify_creators():
 
     conn = get_db_connection()
     creators = conn.execute(
-        "SELECT id, username, email, full_name, phone, gov_id, linkedin_id, present_address FROM users WHERE role='creator' AND verified=0"
+        "SELECT id, username, email, full_name, phone, gov_id, linkedin_id, present_address FROM users WHERE role='creator' AND verified=0 AND full_name IS NOT NULL AND full_name != ''"
     ).fetchall()
     conn.close()
     return render_template('admin_verify_creator.html', creators=creators)
@@ -439,10 +413,39 @@ def verify_investors():
 
     conn = get_db_connection()
     investors = conn.execute(
-        "SELECT id, username, email, full_name, phone, gov_id, linkedin_id, present_address FROM users WHERE role='investor' AND verified=0"
+        "SELECT id, username, email, full_name, phone, gov_id, linkedin_id, present_address FROM users WHERE role='investor' AND verified=0 AND full_name IS NOT NULL AND full_name != ''"
     ).fetchall()
     conn.close()
     return render_template('admin_verify_investor.html', investors=investors)
+
+
+@app.route('/unverify_user/<int:user_id>/<role>')
+def unverify_user(user_id, role):
+    # Ensure only admins can perform this action
+    if 'user_id' not in session or session.get('role') != 'admin':
+        flash('Unauthorized access.', 'danger')
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Prevent un-verifying an admin
+    if role.lower() == 'admin':
+        flash("Cannot unverify an admin user.", "danger")
+        conn.close()
+        return redirect(url_for('user_management'))
+
+    # Update the user's status to 2 (Declined/Unverified)
+    cursor.execute("UPDATE users SET verified = 2 WHERE id = ?", (user_id,))
+    conn.commit()
+
+    if cursor.rowcount > 0:
+        flash(f"User has been successfully unverified.", "info")
+    else:
+        flash("Failed to unverify user. User not found.", "warning")
+
+    conn.close()
+    return redirect(url_for('user_management'))
 
 
 #admin approves a creator request in admin_verify_creator.html

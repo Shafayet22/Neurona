@@ -15,7 +15,7 @@ def get_db_connection():
     return conn
 
 
-# Creation of tables(users, ideas) if not already present
+# Creation of tables(users, ideas) if not already present in project file
 def init_db():
     if not os.path.exists(DB_NAME):
         conn = sqlite3.connect(DB_NAME)
@@ -145,7 +145,7 @@ def login():
     return render_template('login.html')
 
 
-# ---------------------- CREATOR LOGIC STARTS FROM HERE ----------------------
+##  --------------------------------------- CREATOR LOGIC STARTS FROM HERE ----------------------------------------- ##
 
 # main creator dashboard
 @app.route('/creator_dashboard')
@@ -267,7 +267,7 @@ def submit_idea():
 
 
 
-# ----------------- INVESTOR LOGIC STARTS FROM HERE --------------------------
+## ---------------------------------- INVESTOR LOGIC STARTS FROM HERE ------------------------------------------- ##
 
 
 # main investor dashboard logic
@@ -329,9 +329,9 @@ def verify_investor():
 
 
 
-# ------------------ ADMIN LOGIC STARTS FROM HERE -------------------------
+## ----------------------------------- ADMIN LOGIC STARTS FROM HERE ------------------------------------------------------------##
 
-# main admin dashboard
+# main ADMIN dashboard
 @app.route('/admin_dashboard')
 def admin_dashboard():
     if 'user_id' not in session or session.get('role') != 'admin':
@@ -419,6 +419,7 @@ def verify_investors():
     return render_template('admin_verify_investor.html', investors=investors)
 
 
+# Admin unverifies a verified user by setting status to 2(declined/unverified)
 @app.route('/unverify_user/<int:user_id>/<role>')
 def unverify_user(user_id, role):
     # Ensure only admins can perform this action
@@ -508,7 +509,6 @@ def decline_investor(user_id):
     return redirect(url_for('verify_investors'))
 
 
-
 #Show ideas info in manage ideas(admin dashboard)
 @app.route('/admin_ideas')
 def admin_ideas():
@@ -549,7 +549,7 @@ def remove_idea(idea_id):
     return redirect(url_for('admin_ideas'))
 
 
-#--------------admin logic ends--------------------------------------------
+##  ----------------------------------- ADMIN LOGIC ENDS ----------------------------------------------------------- ##
 
 @app.route("/privacy-policy")
 def privacy_policy():

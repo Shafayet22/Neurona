@@ -36,11 +36,13 @@ def init_db():
             )
         ''')
         c.execute('''
-                   CREATE TABLE ideas (
+                    CREATE TABLE ideas (
                        id INTEGER PRIMARY KEY AUTOINCREMENT,
                        creator_id INTEGER NOT NULL,
                        title TEXT NOT NULL,
                        category TEXT NOT NULL,
+                       tags TEXT,
+                       stage TEXT DEFAULT 'Idea',
                        industry TEXT,
                        summary TEXT,
                        description TEXT,
@@ -48,6 +50,7 @@ def init_db():
                        equity_offered REAL,
                        pitch_deck TEXT,
                        contact_email TEXT,
+                       product_image TEXT,
                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                        FOREIGN KEY (creator_id) REFERENCES users(id)
                    )
@@ -153,11 +156,31 @@ def creator_dashboard():
     if 'username' in session and session.get('role') == 'creator':
         conn = get_db_connection()
         user = conn.execute("SELECT verified FROM users WHERE email = ?", (session['email'],)).fetchone()
+
+        # Fetch creator's own ideas
+        creator_ideas = conn.execute('''
+            SELECT 
+                id, 
+                title, 
+                category, 
+                summary, 
+                industry,
+                funding_needed,
+                equity_offered,
+                contact_email,
+                product_image,
+                created_at
+            FROM ideas 
+            WHERE creator_id = ?
+            ORDER BY created_at DESC
+        ''', (session['user_id'],)).fetchall()
+
         conn.close()
         verified = user['verified'] if user else 0
         # Update session so you keep the verified status too
         session['verified'] = verified
-        return render_template('creator_dashboard.html', username=session['username'], verified=verified)
+        return render_template('creator_dashboard.html', username=session['username'], verified=verified,
+                               creator_ideas=creator_ideas)
 
     return redirect(url_for('login'))
 
@@ -233,12 +256,36 @@ def submit_idea():
     if request.method == 'POST':
         title = request.form['title']
         category = request.form['category']
+        tags = request.form.get('tags', '')
+        stage = request.form.get('stage', 'Idea')
         industry = request.form.get('industry')
         summary = request.form.get('summary')
         description = request.form.get('description')
         funding = request.form.get('funding_needed', type=float)
         equity = request.form.get('equity_offered', type=float)
         contact_email = request.form.get('contact_email')
+
+        # Handle file uploads
+        product_image = request.files.get('product_image')
+        product_image_filename = None
+
+        if product_image and product_image.filename:
+            import os
+            from werkzeug.utils import secure_filename
+
+            # Create uploads directory if it doesn't exist
+            upload_dir = os.path.join('static', 'uploads')
+            if not os.path.exists(upload_dir):
+                os.makedirs(upload_dir)
+
+            # Save the product image
+            filename = secure_filename(product_image.filename)
+            # Add timestamp to avoid filename conflicts
+            import time
+            timestamp = str(int(time.time()))
+            name, ext = os.path.splitext(filename)
+            product_image_filename = f"{name}_{timestamp}{ext}"
+            product_image.save(os.path.join(upload_dir, product_image_filename))
 
         conn = get_db_connection()
         c = conn.cursor()
@@ -249,10 +296,11 @@ def submit_idea():
             creator_id = creator['id']
             c.execute('''
                 INSERT INTO ideas (
-                    creator_id, title, category, industry, summary, description,
-                    funding_needed, equity_offered, contact_email
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (creator_id, title, category, industry, summary, description, funding, equity, contact_email))
+                    creator_id, title, category, tags, stage, industry, summary, description,
+                    funding_needed, equity_offered, contact_email, product_image
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (creator_id, title, category, tags, stage, industry, summary, description, funding, equity,
+                  contact_email, product_image_filename))
             conn.commit()
             conn.close()
             flash('Idea submitted successfully!', 'success')
@@ -265,8 +313,6 @@ def submit_idea():
     return render_template('submit_idea.html')
 
 
-
-
 ## ---------------------------------- INVESTOR LOGIC STARTS FROM HERE ------------------------------------------- ##
 
 
@@ -276,11 +322,74 @@ def investor_dashboard():
     if 'username' in session and session.get('role') == 'investor':
         conn = get_db_connection()
         user = conn.execute("SELECT verified FROM users WHERE email = ?", (session['email'],)).fetchone()
+
+        # Get search and filter parameters
+        search_query = request.args.get('search', '').strip()
+        category_filter = request.args.get('category', '').strip()
+        stage_filter = request.args.get('stage', '').strip()
+
+        # Build the SQL query with filters
+        base_query = '''
+            SELECT 
+                i.id, 
+                i.title, 
+                i.category, 
+                i.tags,
+                i.stage,
+                i.summary, 
+                i.industry,
+                i.funding_needed,
+                i.equity_offered,
+                i.contact_email,
+                i.product_image,
+                i.created_at,
+                u.username 
+            FROM ideas i 
+            JOIN users u ON i.creator_id = u.id
+            WHERE 1=1
+        '''
+
+        params = []
+
+        # Add search filter
+        if search_query:
+            base_query += " AND (i.title LIKE ? OR i.category LIKE ? OR i.tags LIKE ?)"
+            search_param = f"%{search_query}%"
+            params.extend([search_param, search_param, search_param])
+
+        # Add category filter
+        if category_filter and category_filter != 'All Categories':
+            base_query += " AND i.category = ?"
+            params.append(category_filter)
+
+        # Add stage filter
+        if stage_filter and stage_filter != 'All Stages':
+            base_query += " AND i.stage = ?"
+            params.append(stage_filter)
+
+        base_query += " ORDER BY i.created_at DESC"
+
+        # Fetch all ideas for investment opportunities
+        ideas = conn.execute(base_query, params).fetchall()
+
+        # Get unique categories and stages for filter dropdowns
+        categories = conn.execute(
+            "SELECT DISTINCT category FROM ideas WHERE category IS NOT NULL ORDER BY category").fetchall()
+        stages = conn.execute("SELECT DISTINCT stage FROM ideas WHERE stage IS NOT NULL ORDER BY stage").fetchall()
+
         conn.close()
         verified = user['verified'] if user else 0
         # Update session so you keep the verified status too
         session['verified'] = verified
-        return render_template('investor_dashboard.html', username=session['username'], verified=verified)
+        return render_template('investor_dashboard.html',
+                               username=session['username'],
+                               verified=verified,
+                               ideas=ideas,
+                               categories=categories,
+                               stages=stages,
+                               current_search=search_query,
+                               current_category=category_filter,
+                               current_stage=stage_filter)
     return redirect(url_for('login'))
 
 
@@ -326,6 +435,51 @@ def verify_investor():
 
     return render_template('verify_investor.html', email=session['email'])
 
+
+
+
+# Idea details page for investors
+@app.route('/idea/<int:idea_id>')
+def idea_details(idea_id):
+    if 'username' not in session or session.get('role') != 'investor':
+        flash('Only investors can view idea details.', 'danger')
+        return redirect(url_for('login'))
+
+    # Check if investor is verified
+    if session.get('verified') != 1:
+        flash('Please verify your account to view idea details.', 'warning')
+        return redirect(url_for('investor_dashboard'))
+
+    conn = get_db_connection()
+    idea = conn.execute('''
+        SELECT 
+            i.id, 
+            i.title, 
+            i.category, 
+            i.tags,
+            i.stage,
+            i.summary, 
+            i.description,
+            i.industry,
+            i.funding_needed,
+            i.equity_offered,
+            i.contact_email,
+            i.product_image,
+            i.created_at,
+            u.username,
+            u.full_name
+        FROM ideas i 
+        JOIN users u ON i.creator_id = u.id
+        WHERE i.id = ?
+    ''', (idea_id,)).fetchone()
+
+    conn.close()
+
+    if not idea:
+        flash('Idea not found.', 'danger')
+        return redirect(url_for('investor_dashboard'))
+
+    return render_template('idea_details.html', idea=idea)
 
 
 
@@ -551,6 +705,9 @@ def remove_idea(idea_id):
 
 ##  ----------------------------------- ADMIN LOGIC ENDS ----------------------------------------------------------- ##
 
+
+
+
 @app.route("/privacy-policy")
 def privacy_policy():
     return render_template("privacy_policy.html")
@@ -581,3 +738,4 @@ def logout():
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)
+

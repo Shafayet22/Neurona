@@ -641,7 +641,6 @@ def decline_creator(user_id):
     conn.execute('UPDATE users SET verified = 2 WHERE id = ?', (user_id,))
     conn.commit()
     conn.close()
-    flash('Verification request declined.', 'info')
     return redirect(url_for('verify_creators'))
 
 
@@ -658,7 +657,6 @@ def decline_investor(user_id):
     conn.execute('UPDATE users SET verified = 2 WHERE id = ?', (user_id,))
     conn.commit()
     conn.close()
-    flash('Verification request declined.', 'info')
     return redirect(url_for('verify_investors'))
 
 
@@ -736,3 +734,4 @@ def logout():
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)
+

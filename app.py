@@ -540,7 +540,6 @@ def delete_user(user_id):
     cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
     conn.close()
-    flash("User deleted successfully.", "success")
     return redirect(url_for('user_management'))
 
 
@@ -699,7 +698,6 @@ def remove_idea(idea_id):
     conn.execute('DELETE FROM ideas WHERE id = ?', (idea_id,))
     conn.commit()
     conn.close()
-    flash("Idea removed successfully.", "success")
     return redirect(url_for('admin_ideas'))
 
 
@@ -738,4 +736,3 @@ def logout():
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)
-

@@ -442,7 +442,6 @@ def verify_investor():
 @app.route('/idea/<int:idea_id>')
 def idea_details(idea_id):
     if 'username' not in session or session.get('role') != 'investor':
-        flash('Only investors can view idea details.', 'danger')
         return redirect(url_for('login'))
 
     # Check if investor is verified
@@ -734,4 +733,5 @@ def logout():
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)
+
 

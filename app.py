@@ -745,6 +745,8 @@ def remove_idea(idea_id):
     flash('Idea removed successfully.', 'success')
     return redirect(url_for('admin_dashboard'))
 
+
+
 ##  ----------------------------------- ADMIN LOGIC ENDS ----------------------------------------------------------- ##
 
 
@@ -773,7 +775,6 @@ def logout():
     session.clear()
     flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
-
 
 
 # Runs the app from here

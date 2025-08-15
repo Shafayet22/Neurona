@@ -313,6 +313,49 @@ def submit_idea():
     return render_template('submit_idea.html')
 
 
+
+# creator ideas details logic
+@app.route('/creator/ideas/<int:idea_id>')
+def creator_idea_details(idea_id):
+    # Check if the user is logged in and is a creator
+    if 'username' not in session or session.get('role') != 'creator':
+        flash('Unauthorized access.', 'danger')
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    # Fetch the idea, ensuring it belongs to the current user
+    idea = conn.execute('''
+        SELECT 
+            id, 
+            title, 
+            category, 
+            tags,
+            stage,
+            summary, 
+            description,
+            funding_needed,
+            equity_offered,
+            product_image
+        FROM ideas 
+        WHERE id = ? AND creator_id = ?
+    ''', (idea_id, session['user_id'])).fetchone()
+    conn.close()
+
+    if not idea:
+        flash('Idea not found or you do not have permission to view it.', 'danger')
+        return redirect(url_for('creator_dashboard'))
+
+    return render_template('creator_idea_details.html', idea=idea)
+
+
+
+#route for creator wallet
+@app.route('/creator_wallet')
+def creator_wallet():
+    return render_template('creator_wallet.html')
+
+
+
 ## ---------------------------------- INVESTOR LOGIC STARTS FROM HERE ------------------------------------------- ##
 
 
@@ -481,6 +524,12 @@ def idea_details(idea_id):
     return render_template('idea_details.html', idea=idea)
 
 
+#route for investor wallet
+@app.route('/investor_wallet')
+def investor_wallet():
+    return render_template('investor_wallet.html')
+
+
 
 ## ----------------------------------- ADMIN LOGIC STARTS FROM HERE ------------------------------------------------------------##
 
@@ -592,11 +641,6 @@ def unverify_user(user_id, role):
     cursor.execute("UPDATE users SET verified = 2 WHERE id = ?", (user_id,))
     conn.commit()
 
-    if cursor.rowcount > 0:
-        flash(f"User has been successfully unverified.", "info")
-    else:
-        flash("Failed to unverify user. User not found.", "warning")
-
     conn.close()
     return redirect(url_for('user_management'))
 
@@ -695,11 +739,13 @@ def remove_idea(idea_id):
     conn.execute('DELETE FROM ideas WHERE id = ?', (idea_id,))
     conn.commit()
     conn.close()
-    return redirect(url_for('admin_ideas'))
 
+    # Redirect back to the admin dashboard after deletion
+    # The dashboard will then re-fetch the new total_ideas count
+    flash('Idea removed successfully.', 'success')
+    return redirect(url_for('admin_dashboard'))
 
 ##  ----------------------------------- ADMIN LOGIC ENDS ----------------------------------------------------------- ##
-
 
 
 
@@ -729,9 +775,8 @@ def logout():
     return redirect(url_for('login'))
 
 
+
 # Runs the app from here
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)
-
-

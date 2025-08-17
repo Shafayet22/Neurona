@@ -55,6 +55,35 @@ def init_db():
                        FOREIGN KEY (creator_id) REFERENCES users(id)
                    )
                ''')
+        c.execute('''
+            CREATE TABLE investment_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                investor_id INTEGER NOT NULL,
+                creator_id INTEGER NOT NULL,
+                idea_id INTEGER NOT NULL,
+                investment_amount REAL NOT NULL,
+                status TEXT DEFAULT 'pending',
+                message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (investor_id) REFERENCES users(id),
+                FOREIGN KEY (creator_id) REFERENCES users(id),
+                FOREIGN KEY (idea_id) REFERENCES ideas(id)
+            )
+        ''')
+        c.execute('''
+            CREATE TABLE notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                type TEXT DEFAULT 'info',
+                is_read INTEGER DEFAULT 0,
+                related_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
         admin_email = "admin@neurona.com"
         admin_password = "admin@123"
         hashed_pw = generate_password_hash(admin_password)
@@ -378,6 +407,86 @@ def delete_creator_idea(idea_id):
     return redirect(url_for('creator_dashboard'))
 
 
+# Creator investment requests page
+@app.route('/creator/investment_requests')
+def creator_investment_requests():
+    if 'user_id' not in session or session.get('role') != 'creator':
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    pending_requests = conn.execute('''
+        SELECT ir.*, i.title, i.summary, i.product_image, u.username as investor_name, u.email as investor_email
+        FROM investment_requests ir
+        JOIN ideas i ON ir.idea_id = i.id
+        JOIN users u ON ir.investor_id = u.id
+        WHERE ir.creator_id = ? AND ir.status = 'pending'
+        ORDER BY ir.created_at DESC
+    ''', (session['user_id'],)).fetchall()
+    
+    conn.close()
+    
+    return render_template('creator_investment_requests.html', 
+                         pending_requests=pending_requests,
+                         username=session.get('username'))
+
+
+# Handle investment request decision (approve/decline)
+@app.route('/creator/investment_request/<int:request_id>/<action>')
+def handle_investment_request(request_id, action):
+    if 'user_id' not in session or session.get('role') != 'creator':
+        return redirect(url_for('login'))
+    
+    if action not in ['approve', 'decline']:
+        flash('Invalid action.', 'danger')
+        return redirect(url_for('creator_investment_requests'))
+    
+    conn = get_db_connection()
+    
+    # Get request details
+    request_details = conn.execute('''
+        SELECT ir.*, i.title, u.username as investor_name
+        FROM investment_requests ir
+        JOIN ideas i ON ir.idea_id = i.id
+        JOIN users u ON ir.investor_id = u.id
+        WHERE ir.id = ? AND ir.creator_id = ?
+    ''', (request_id, session['user_id'])).fetchone()
+    
+    if not request_details:
+        flash('Investment request not found.', 'danger')
+        conn.close()
+        return redirect(url_for('creator_investment_requests'))
+    
+    # Update request status
+    new_status = 'approved' if action == 'approve' else 'declined'
+    conn.execute('''
+        UPDATE investment_requests 
+        SET status = ?, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ?
+    ''', (new_status, request_id))
+    
+    # Create notification for investor
+    if action == 'approve':
+        notification_title = "Investment Request Approved"
+        notification_message = f"Your investment request for '{request_details['title']}' has been approved! Proceed to payment & agreement."
+        notification_type = 'success'
+    else:
+        notification_title = "Investment Request Declined"
+        notification_message = f"Your investment request for '{request_details['title']}' has been declined by the creator."
+        notification_type = 'info'
+    
+    conn.execute('''
+        INSERT INTO notifications (user_id, title, message, type, related_id)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (request_details['investor_id'], notification_title, notification_message, notification_type, request_details['idea_id']))
+    
+    conn.commit()
+    conn.close()
+    
+    action_text = 'approved' if action == 'approve' else 'declined'
+    flash(f'Investment request {action_text} successfully!', 'success')
+    return redirect(url_for('creator_investment_requests'))
+
+
 #route for creator wallet
 @app.route('/creator_wallet')
 def creator_wallet():
@@ -551,6 +660,106 @@ def idea_details(idea_id):
         return redirect(url_for('investor_dashboard'))
 
     return render_template('idea_details.html', idea=idea)
+
+
+# Investment request submission
+@app.route('/submit_investment_request/<int:idea_id>', methods=['POST'])
+def submit_investment_request(idea_id):
+    if 'user_id' not in session or session.get('role') != 'investor':
+        flash('Please login as an investor to submit investment requests.', 'danger')
+        return redirect(url_for('login'))
+    
+    if session.get('verified') != 1:
+        flash('Please verify your account before submitting investment requests.', 'warning')
+        return redirect(url_for('investor_dashboard'))
+    
+    investment_amount = request.form.get('investment_amount', type=float)
+    message = request.form.get('message', '').strip()
+    
+    if not investment_amount or investment_amount <= 0:
+        flash('Please enter a valid investment amount.', 'danger')
+        return redirect(url_for('idea_details', idea_id=idea_id))
+    
+    conn = get_db_connection()
+    
+    # Get idea and creator info
+    idea = conn.execute('''
+        SELECT i.*, u.username as creator_name 
+        FROM ideas i 
+        JOIN users u ON i.creator_id = u.id 
+        WHERE i.id = ?
+    ''', (idea_id,)).fetchone()
+    
+    if not idea:
+        flash('Idea not found.', 'danger')
+        conn.close()
+        return redirect(url_for('investor_dashboard'))
+    
+    # Check if investor already has a pending request for this idea
+    existing_request = conn.execute('''
+        SELECT id FROM investment_requests 
+        WHERE investor_id = ? AND idea_id = ? AND status = 'pending'
+    ''', (session['user_id'], idea_id)).fetchone()
+    
+    if existing_request:
+        flash('You already have a pending investment request for this idea.', 'warning')
+        conn.close()
+        return redirect(url_for('idea_details', idea_id=idea_id))
+    
+    # Create investment request
+    conn.execute('''
+        INSERT INTO investment_requests (investor_id, creator_id, idea_id, investment_amount, message)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (session['user_id'], idea['creator_id'], idea_id, investment_amount, message))
+    
+    # Create notification for creator
+    investor_name = session.get('username', 'An investor')
+    notification_title = "New Investment Request"
+    notification_message = f"{investor_name} wants to invest BDT {investment_amount:,.0f} in your idea '{idea['title']}'"
+    
+    conn.execute('''
+        INSERT INTO notifications (user_id, title, message, type, related_id)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (idea['creator_id'], notification_title, notification_message, 'investment_request', idea_id))
+    
+    conn.commit()
+    conn.close()
+    
+    flash('Investment request submitted successfully! The creator will review your request.', 'success')
+    return redirect(url_for('investor_dashboard'))
+
+
+# Investor pending investments page
+@app.route('/investor/pending_investments')
+def investor_pending_investments():
+    if 'user_id' not in session or session.get('role') != 'investor':
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    pending_requests = conn.execute('''
+        SELECT ir.*, i.title, i.summary, i.product_image, u.username as creator_name
+        FROM investment_requests ir
+        JOIN ideas i ON ir.idea_id = i.id
+        JOIN users u ON ir.creator_id = u.id
+        WHERE ir.investor_id = ? AND ir.status = 'pending'
+        ORDER BY ir.created_at DESC
+    ''', (session['user_id'],)).fetchall()
+    
+    approved_requests = conn.execute('''
+        SELECT ir.*, i.title, i.summary, i.product_image, u.username as creator_name
+        FROM investment_requests ir
+        JOIN ideas i ON ir.idea_id = i.id
+        JOIN users u ON ir.creator_id = u.id
+        WHERE ir.investor_id = ? AND ir.status = 'approved'
+        ORDER BY ir.updated_at DESC
+    ''', (session['user_id'],)).fetchall()
+    
+    conn.close()
+    
+    return render_template('investor_pending_investments.html', 
+                         pending_requests=pending_requests,
+                         approved_requests=approved_requests,
+                         username=session.get('username'))
 
 
 #route for investor wallet
@@ -778,6 +987,45 @@ def remove_idea(idea_id):
 
 ##  ----------------------------------- ADMIN LOGIC ENDS ----------------------------------------------------------- ##
 
+
+# Notifications page
+@app.route('/notifications')
+def notifications():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    notifications = conn.execute('''
+        SELECT * FROM notifications 
+        WHERE user_id = ? 
+        ORDER BY created_at DESC
+    ''', (session['user_id'],)).fetchall()
+    
+    # Mark all notifications as read
+    conn.execute('UPDATE notifications SET is_read = 1 WHERE user_id = ?', (session['user_id'],))
+    conn.commit()
+    conn.close()
+    
+    return render_template('notifications.html', 
+                         notifications=notifications,
+                         username=session.get('username'),
+                         role=session.get('role'))
+
+
+# Get unread notification count (for navbar badge)
+@app.route('/api/unread_notifications_count')
+def unread_notifications_count():
+    if 'user_id' not in session:
+        return {'count': 0}
+    
+    conn = get_db_connection()
+    count = conn.execute('''
+        SELECT COUNT(*) as count FROM notifications 
+        WHERE user_id = ? AND is_read = 0
+    ''', (session['user_id'],)).fetchone()['count']
+    conn.close()
+    
+    return {'count': count}
 
 
 @app.route("/privacy-policy")

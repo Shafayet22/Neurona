@@ -348,6 +348,35 @@ def creator_idea_details(idea_id):
     return render_template('creator_idea_details.html', idea=idea)
 
 
+#  Delete an idea(creator's idea)
+@app.route('/creator/ideas/delete/<int:idea_id>', methods=['POST'])
+def delete_creator_idea(idea_id):
+    # Ensure the user is a creator and is logged in
+    if 'user_id' not in session or session.get('role') != 'creator':
+        flash('Unauthorized access.', 'danger')
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    try:
+        # First, check if the idea belongs to the logged-in user
+        idea = conn.execute('SELECT creator_id FROM ideas WHERE id = ?', (idea_id,)).fetchone()
+
+        if idea is None or idea['creator_id'] != session['user_id']:
+            flash('You do not have permission to delete this idea.', 'danger')
+            return redirect(url_for('creator_dashboard'))
+
+        # If the user is the owner, proceed with deletion
+        conn.execute('DELETE FROM ideas WHERE id = ?', (idea_id,))
+        conn.commit()
+        flash('Idea deleted successfully.', 'success')
+
+    except sqlite3.Error as e:
+        flash(f'An error occurred: {e}', 'danger')
+    finally:
+        conn.close()
+
+    return redirect(url_for('creator_dashboard'))
+
 
 #route for creator wallet
 @app.route('/creator_wallet')
@@ -775,6 +804,7 @@ def logout():
     session.clear()
     flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
+
 
 
 # Runs the app from here

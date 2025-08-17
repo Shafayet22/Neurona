@@ -12,11 +12,12 @@
         .login-body {
             background: linear-gradient(135deg, #0F0F0F 0%, #1a1a1a 50%, #000000 100%);
             min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-family: 'Poppins', sans-serif;
             position: relative;
-            overflow-x: hidden;
-            padding: 0;
-            margin: 0;
+            overflow: hidden;
         }
 
         .login-body::before {
@@ -33,15 +34,15 @@
             pointer-events: none;
         }
 
-        .register-container {
+        .login-container {
             position: relative;
             z-index: 2;
             width: 100%;
-            max-width: 550px;
-            margin: 0 auto;
+            max-width: 450px;
+            padding: 20px;
         }
 
-        .register-card {
+        .login-card {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -52,10 +53,9 @@
                 inset 0 1px 0 rgba(255, 255, 255, 0.1);
             position: relative;
             overflow: hidden;
-            margin: 20px;
         }
 
-        .register-card::before {
+        .login-card::before {
             content: '';
             position: absolute;
             top: 0;
@@ -65,12 +65,12 @@
             background: linear-gradient(90deg, transparent, rgba(166, 139, 92, 0.5), transparent);
         }
 
-        .register-header {
+        .login-header {
             text-align: center;
             margin-bottom: 30px;
         }
 
-        .register-title {
+        .login-title {
             font-size: 28px;
             font-weight: 700;
             color: #ffffff;
@@ -81,7 +81,7 @@
             -webkit-text-fill-color: transparent;
         }
 
-        .register-subtitle {
+        .login-subtitle {
             color: rgba(255, 255, 255, 0.7);
             font-size: 14px;
             font-weight: 400;
@@ -100,7 +100,7 @@
             display: block;
         }
 
-        .form-control, .form-select {
+        .form-control {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 12px;
@@ -111,7 +111,7 @@
             backdrop-filter: blur(10px);
         }
 
-        .form-control:focus, .form-select:focus {
+        .form-control:focus {
             background: rgba(255, 255, 255, 0.08);
             border-color: #A68B5C;
             box-shadow: 0 0 0 3px rgba(166, 139, 92, 0.1);
@@ -123,12 +123,7 @@
             color: rgba(255, 255, 255, 0.5);
         }
 
-        .form-select option {
-            background: #1a1a1a;
-            color: #ffffff;
-        }
-
-        .register-btn {
+        .login-btn {
             width: 100%;
             padding: 14px;
             background: linear-gradient(135deg, #818181 0%, #818181 100%);
@@ -143,15 +138,7 @@
             margin-top: 10px;
         }
 
-        .register-btn:disabled {
-            background: rgba(255, 255, 255, 0.1);
-            color: rgba(255, 255, 255, 0.5);
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .register-btn::before {
+        .login-btn::before {
             content: '';
             position: absolute;
             top: 0;
@@ -162,40 +149,40 @@
             transition: left 0.5s;
         }
 
-        .register-btn:hover:not(:disabled) {
+        .login-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(166, 139, 92, 0.3);
         }
 
-        .register-btn:hover:not(:disabled)::before {
+        .login-btn:hover::before {
             left: 100%;
         }
 
-        .register-btn:active:not(:disabled) {
+        .login-btn:active {
             transform: translateY(0);
         }
 
-        .register-footer {
+        .login-footer {
             text-align: center;
             margin-top: 25px;
             padding-top: 20px;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .register-footer p {
+        .login-footer p {
             color: rgba(255, 255, 255, 0.7);
             font-size: 14px;
             margin: 0;
         }
 
-        .register-footer a {
+        .login-footer a {
             color: #cbcbcb;
             text-decoration: none;
             font-weight: 600;
             transition: color 0.3s ease;
         }
 
-        .register-footer a:hover {
+        .login-footer a:hover {
             color: #ffffff;
         }
 
@@ -221,58 +208,61 @@
         }
 
         .hint {
-            font-size: 12px;
-            margin-top: 6px;
-            padding: 6px 10px;
-            border-radius: 6px;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
+            font-size: 0.875em;
+            margin-top: 5px;
         }
-
         .hint.valid {
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.3);
             color: #10b981;
         }
-
         .hint.invalid {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
             color: #ef4444;
         }
-
         .is-valid {
             border-color: #10b981 !important;
-            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1) !important;
         }
-
         .is-invalid {
             border-color: #ef4444 !important;
-            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+        }
+
+        .form-select {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            color: #ffffff;
+            padding: 14px 16px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 1em center;
+            background-size: 0.65em 0.65em;
+        }
+
+        .form-select option {
+            background: #1a1a1a;
+            color: #ffffff;
         }
 
         @media (max-width: 576px) {
-            .register-card {
-                padding: 25px 20px;
-                margin: 15px;
+            .login-card {
+                padding: 30px 25px;
+                margin: 20px;
             }
 
-            .register-title {
+            .login-title {
                 font-size: 24px;
-            }
-
-            .register-container {
-                padding: 10px;
             }
         }
     </style>
 </head>
 <body class="login-body">
-    <div class="register-container" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px 0;">
-        <div class="register-card">
-            <div class="register-header">
-                <h1 class="register-title">Join Neurona</h1>
-                <p class="register-subtitle">Create your account to get started</p>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h1 class="login-title">Create Account</h1>
+                <p class="login-subtitle">Sign up to get started</p>
             </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
@@ -288,43 +278,38 @@
             <form method="POST" action="{{ url_for('register') }}" id="registerForm">
                 <div class="form-group">
                     <label for="username" class="form-label">Username</label>
-                    <input required type="text" class="form-control" id="username" name="username" placeholder="Choose a username" />
+                    <input required type="text" class="form-control" id="username" name="username" placeholder="Enter your username"/>
                 </div>
-
                 <div class="form-group">
-                    <label for="email" class="form-label">Email Address</label>
+                    <label for="email" class="form-label">Email address</label>
                     <input required type="email" class="form-control" id="email" name="email" placeholder="Enter your email" />
                     <div id="emailHint" class="hint"></div>
                 </div>
-
                 <div class="form-group">
                     <label for="password" class="form-label">Password</label>
-                    <input required type="password" class="form-control" id="password" name="password" placeholder="Create a strong password" />
+                    <input required type="password" class="form-control" id="password" name="password" placeholder="Create a password" />
                     <div id="passwordHint" class="hint"></div>
                 </div>
-
                 <div class="form-group">
                     <label for="confirm_password" class="form-label">Confirm Password</label>
                     <input required type="password" class="form-control" id="confirm_password" name="confirm_password" placeholder="Confirm your password" />
                     <div id="confirmHint" class="hint"></div>
                 </div>
-
                 <div class="form-group">
-                    <label for="role" class="form-label">I want to join as</label>
+                    <label for="role" class="form-label">Role</label>
                     <select class="form-select" id="role" name="role" required>
-                        <option value="">Select your role</option>
-                        <option value="creator">Creator - Share my ideas</option>
-                        <option value="investor">Investor - Fund great ideas</option>
+                        <option value="">Select role</option>
+                        <option value="creator">Creator</option>
+                        <option value="investor">Investor</option>
                     </select>
                 </div>
-
-                <button type="submit" class="register-btn" id="submitBtn" disabled>
-                    Create Account
+                <button type="submit" class="login-btn" id="submitBtn" disabled>
+                    Register
                 </button>
             </form>
 
-            <div class="register-footer">
-                <p>Already have an account? <a href="{{ url_for('login') }}">Sign in here</a></p>
+            <div class="login-footer">
+                <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
             </div>
         </div>
     </div>
@@ -337,7 +322,7 @@
       flash.style.opacity = '0';
       setTimeout(() => flash.remove(), 500);
     });
-  }, 2000);
+  }, 4000);
 </script>
 
 <script>

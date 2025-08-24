@@ -84,6 +84,18 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         ''')
+        # Add wallet_transactions table
+        c.execute('''
+            CREATE TABLE wallet_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
         admin_email = "admin@neurona.com"
         admin_password = "admin@123"
         hashed_pw = generate_password_hash(admin_password)
@@ -92,6 +104,16 @@ def init_db():
         conn.commit()
         conn.close()
         print(f" Admin created: {admin_email} / {admin_password}")
+
+    # Check and add wallet_balance column if it doesn't exist
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("PRAGMA table_info(users)")
+    columns = [col['name'] for col in c.fetchall()]
+    if 'wallet_balance' not in columns:
+        c.execute("ALTER TABLE users ADD COLUMN wallet_balance REAL DEFAULT 0.0")
+        conn.commit()
+    conn.close()
 
 
 @app.route('/')
@@ -165,7 +187,7 @@ def login():
                 session['email'] = user['email']
                 session['role'] = user['role']
                 session['verified'] = user['verified']
-                session['user_id'] = user['id'] # <--- ADD THIS LINE!
+                session['user_id'] = user['id']
                 return redirect(url_for(f"{user['role']}_dashboard"))
             else:
                 flash('Incorrect password.', 'danger')
@@ -255,7 +277,6 @@ def verify_creator():
         return redirect(url_for('creator_dashboard'))
 
     return render_template('verify_creator.html', email=session['email'])
-
 
 
 #logic of uploading ideas by a creator
@@ -583,7 +604,6 @@ def investor_dashboard():
     return redirect(url_for('login'))
 
 
-
 # verification request sent by investor
 @app.route('/investor/verify', methods=['GET', 'POST'])
 def verify_investor():
@@ -782,8 +802,116 @@ def investor_pending_investments():
 #route for investor wallet
 @app.route('/investor_wallet')
 def investor_wallet():
-    return render_template('investor_wallet.html')
+    if 'user_id' not in session or session.get('role') != 'investor':
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    user = conn.execute("SELECT wallet_balance FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+    wallet_balance = user['wallet_balance'] if user else 0.0
 
+    recent_transactions = conn.execute('''
+        SELECT amount, type, created_at
+        FROM wallet_transactions
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 5
+    ''', (session['user_id'],)).fetchall()
+    conn.close()
+    
+    return render_template('investor_wallet.html', 
+                           balance=wallet_balance, 
+                           transactions=recent_transactions,
+                           username=session.get('username'))
+
+
+@app.route('/investor/add_funds', methods=['GET', 'POST'])
+def investor_add_funds():
+    if 'user_id' not in session or session.get('role') != 'investor':
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    bkash_number_hint = '01825877368' # This is the "correct" number for demo purposes
+    otp_code_hint = '456721'       # This is the "correct" OTP for demo purposes
+    bkash_pin_hint = '1234'         # This is the "correct" PIN for demo purposes
+
+    # Determine the current step of the payment process
+    current_step = request.form.get('current_step', 'number')
+    
+    # Initialize amount, it will be updated based on form submission
+    amount = None
+
+    if request.method == 'POST':
+        # Step 1: Handle phone number and amount submission
+        if current_step == 'number':
+            phone_number = request.form.get('bkash_number')
+            amount = request.form.get('amount', type=float) # Get amount from the input field
+            
+            # Input validation: Check if amount is a positive number
+            if amount is None or amount <= 0:
+                flash('Please enter a valid amount.', 'danger')
+                return render_template('payment_gateway.html', step='number', bkash_number=phone_number, amount=0)
+            
+            # Transaction limit check: Ensures amount does not exceed 50,000 BDT
+            if amount > 50000:
+                flash('The maximum limit per transaction is 50,000 BDT.', 'danger')
+                return render_template('payment_gateway.html', step='number', bkash_number=phone_number, amount=amount)
+
+            if phone_number == bkash_number_hint:
+                session['bkash_number'] = phone_number # Store in session for next step
+                session['add_fund_amount'] = amount # Store amount in session
+                return render_template('payment_gateway.html', step='otp', bkash_number=phone_number, amount=amount)
+            else:
+                flash("Invalid Bkash number. Please try again.", "danger")
+                return render_template('payment_gateway.html', step='number', bkash_number=phone_number, amount=amount)
+
+        # Step 2: Handle OTP validation
+        elif current_step == 'otp':
+            otp = request.form.get('otp')
+            bkash_number = session.get('bkash_number')
+            amount = session.get('add_fund_amount') # Retrieve amount from session
+
+            if otp == otp_code_hint:
+                return render_template('payment_gateway.html', step='pin', bkash_number=bkash_number, amount=amount)
+            else:
+                flash("Incorrect OTP. Please try again.", "danger")
+                return render_template('payment_gateway.html', step='otp', bkash_number=bkash_number, amount=amount)
+
+        # Step 3: Handle PIN validation and complete transaction
+        elif current_step == 'pin':
+            pin = request.form.get('pin')
+            bkash_number = session.get('bkash_number') # Not strictly needed here, but for consistency
+            amount = session.get('add_fund_amount') # Retrieve amount from session
+
+            if pin == bkash_pin_hint:
+                conn = get_db_connection()
+                try:
+                    # Update user's wallet balance
+                    conn.execute("UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?", (amount, user_id))
+                    
+                    # Log the transaction
+                    conn.execute('''
+                        INSERT INTO wallet_transactions (user_id, amount, type, status)
+                        VALUES (?, ?, ?, ?)
+                    ''', (user_id, amount, 'Add Funds', 'Completed'))
+                    
+                    conn.commit()
+                    flash(f"BDT {amount:,.2f} has been added to your wallet successfully!", "success")
+                    # Clear session variables after successful transaction
+                    session.pop('bkash_number', None)
+                    session.pop('add_fund_amount', None)
+                    return redirect(url_for('investor_wallet'))
+                except sqlite3.Error as e:
+                    conn.rollback()
+                    flash(f"An error occurred during the transaction: {e}", "danger")
+                finally:
+                    conn.close()
+            else:
+                flash("Incorrect PIN. Please try again.", "danger")
+                return render_template('payment_gateway.html', step='pin', bkash_number=bkash_number, amount=amount)
+    
+    # If it's a GET request or initial load, render the first step
+    # Make sure amount is passed for initial rendering, possibly 0 or a default
+    return render_template('payment_gateway.html', step='number', amount=0)
 
 
 ## ----------------------------------- ADMIN LOGIC STARTS FROM HERE ------------------------------------------------------------##
@@ -936,7 +1064,7 @@ def decline_creator(user_id):
 
     conn = get_db_connection()
     # Set verified to 2 to indicate a declined status, so it no longer appears as 'pending' (0)
-    conn.execute('UPDATE users SET verified = 2 WHERE id = ?', (user_id,))
+    conn.execute('UPDATE users SET verified = 2 WHERE id = ?, role = "creator"', (user_id,))
     conn.commit()
     conn.close()
     return redirect(url_for('verify_creators'))
@@ -952,7 +1080,7 @@ def decline_investor(user_id):
 
     conn = get_db_connection()
     # Set verified to 2 to indicate a declined status, so it no longer appears as 'pending' (0)
-    conn.execute('UPDATE users SET verified = 2 WHERE id = ?', (user_id,))
+    conn.execute('UPDATE users SET verified = 2 WHERE id = ?, role = "investor"', (user_id,))
     conn.commit()
     conn.close()
     return redirect(url_for('verify_investors'))
